@@ -14,6 +14,7 @@ return {
 				end, { noremap = true, silent = true, desc = "GitUi (Root Dir)" }),
 			},
 		}, -- NOTE: Must be loaded before dependants
+		"Hoffs/omnisharp-extended-lsp.nvim",
 		"williamboman/mason-lspconfig.nvim",
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
 		{ "j-hui/fidget.nvim", opts = {} },
@@ -27,7 +28,7 @@ return {
 					mode = mode or "n"
 					vim.keymap.set(mode, keys, func, { buffer = event.buf, desc = "LSP: " .. desc })
 				end
-				map("gd", require("telescope.builtin").lsp_definitions, "[G]oto [D]efinition")
+				-- map("gd", require("telescope.builtin").lsp_definitions, "[G]oto [D]efinition")
 				map("gr", require("telescope.builtin").lsp_references, "[G]oto [R]eferences")
 				map("gI", require("telescope.builtin").lsp_implementations, "[G]oto [I]mplementation")
 				map("<leader>D", require("telescope.builtin").lsp_type_definitions, "Type [D]efinition")
@@ -64,6 +65,9 @@ return {
 						vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled({ bufnr = event.buf }))
 					end, "[T]oggle Inlay [H]ints")
 				end
+				if client and client.name == "omnisharp" then
+					map("gd", require("omnisharp_extended").telescope_lsp_definition, "g]oto [d]efinition")
+				end
 			end,
 		})
 
@@ -71,14 +75,24 @@ return {
 		capabilities = vim.tbl_deep_extend("force", capabilities, require("cmp_nvim_lsp").default_capabilities())
 		local servers = {
 			clangd = {},
-			csharp_ls = {
+			omnisharp = {
 				root_dir = function(fname)
 					local util = require("lspconfig.util")
 					return util.root_pattern("*.sln")(fname) or util.root_pattern("*.csproj")(fname)
 				end,
 				filetypes = { "cs" },
 				init_options = {
-					AutomaticWorkspaceInit = true,
+					enable_editorconfig_support = true,
+					enable_ms_build_load_projects_on_demand = false,
+					enable_roslyn_analyzers = false,
+					organize_imports_on_format = true,
+					enable_import_completion = true,
+					sdk_include_prereleases = true,
+					analyze_open_documents_only = false,
+				},
+				handlers = {
+					["textDocument/definition"] = require("omnisharp_extended").handler,
+					["textDocument/typeDefinition"] = require("omnisharp_extended").handler,
 				},
 			},
 			gopls = {},
@@ -147,5 +161,46 @@ return {
 				end,
 			},
 		})
+
+		vim.lsp.handlers["textDocument/definition"] = function(err, result, ctx, config)
+			if err then
+				vim.notify("LSP Error: " .. err.message, vim.log.levels.ERROR)
+				return
+			end
+
+			if not result or vim.tbl_isempty(result) then
+				vim.notify("No definition found", vim.log.levels.WARN)
+				return
+			end
+
+			local target = vim.tbl_islist(result) and result[1] or result
+			local uri = target.uri or target.targetUri
+			local range = target.range or target.targetSelectionRange
+
+			if not uri or not range then
+				vim.notify("Invalid LSP response: URI or range missing", vim.log.levels.ERROR)
+				return
+			end
+
+			local bufnr = vim.uri_to_bufnr(uri)
+			if not vim.api.nvim_buf_is_valid(bufnr) then
+				vim.notify("Invalid buffer: " .. uri, vim.log.levels.ERROR)
+				return
+			end
+
+			vim.fn.bufload(bufnr) -- Ensure the buffer is loaded
+			vim.api.nvim_set_current_buf(bufnr)
+
+			local lines = vim.api.nvim_buf_line_count(bufnr)
+			local line = math.min(range.start.line + 1, lines) -- Clamp line to valid range
+			local col = math.max(range.start.character, 0) -- Ensure column is non-negative
+
+			if line > lines then
+				vim.notify("Cursor position outside buffer: Line " .. line, vim.log.levels.WARN)
+				return
+			end
+
+			vim.api.nvim_win_set_cursor(0, { line, col })
+		end
 	end,
 }

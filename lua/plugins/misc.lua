@@ -101,4 +101,7 @@ return {
 			require("alpha").setup(require("alpha.themes.dashboard").config)
 		end,
 	},
+	{
+		"Decodetalkers/csharpls-extended-lsp.nvim",
+	},
 }

@@ -80,15 +80,16 @@ return {
 					local util = require("lspconfig.util")
 					return util.root_pattern("*.sln")(fname) or util.root_pattern("*.csproj")(fname)
 				end,
-				filetypes = { "cs" },
-				init_options = {
-					enable_editorconfig_support = true,
-					enable_ms_build_load_projects_on_demand = false,
-					enable_roslyn_analyzers = false,
-					organize_imports_on_format = true,
-					enable_import_completion = true,
-					sdk_include_prereleases = true,
-					analyze_open_documents_only = false,
+				settings = {
+					FormattingOptions = {
+						EnableEditorConfigSupport = true,
+						OrganizeImports = nil,
+					},
+					RoslynExtensionsOptions = {
+						EnableAnalyzersSupport = false,
+						EnableImportCompletion = true,
+						AnalyzeOpenDocumentsOnly = false,
+					},
 				},
 				handlers = {
 					["textDocument/definition"] = require("omnisharp_extended").handler,
